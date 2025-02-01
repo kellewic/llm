@@ -8,4 +8,4 @@ Local models are on a VirtualBox VM with 16GB RAM and 8 CPUs.
 - Do the same with a local version of llama3.2.
 - Responses are saved by model name.
 
-Local models spiked VM CPU 100% causing desktop fans to come on. Lots of resources for a seemingly simple task.
+Local models spiked VM CPU 100% causing desktop fans to come on. Lots of resources for a seemingly simple task, although the URL used does produce around 12k characters.
