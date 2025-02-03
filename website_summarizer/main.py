@@ -1,4 +1,4 @@
-import os
+import os, sys
 import ollama, requests
 
 from bs4 import BeautifulSoup
@@ -7,7 +7,7 @@ from openai import OpenAI
 
 load_dotenv(dotenv_path=find_dotenv())
 api_key = os.getenv('OPENAI_API_KEY')
-model = os.getenv('MODEL')
+model = os.getenv('OPENAI_MODEL')
 
 headers = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36"
