@@ -9,3 +9,11 @@ Local models are on a VirtualBox VM with 16GB RAM and 8 CPUs.
 - Responses are saved by model name.
 
 Local models spiked VM CPU 100% causing desktop fans to come on. Lots of resources for a seemingly simple task, although the URL used does produce around 12k characters.
+
+## brochure_builder
+- Use OpenAI API to get base web page content and links
+- Send links via API asking to decide which links are relevant for a brochure
+- Get page contents for each relevant link
+- Send all page content back to API and build a brochure
+
+This would be better implemented in something like CrewAI, but I wanted to do it the hard way first.
