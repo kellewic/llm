@@ -31,3 +31,10 @@ This would be better implemented in something like CrewAI, but I wanted to do it
 
 ## gradio_llm_chat
 - Basic GPT chat using Gradio
+
+## basic_tool_call
+- Built on **gradio_llm_chat** to mock a basic airline flight pricing chatbot.
+- Handles "tool_calls"
+
+I can now see why frameworks like CrewAI are popular - it's a pain to code this.
+
