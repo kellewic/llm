@@ -28,3 +28,6 @@ This would be better implemented in something like CrewAI, but I wanted to do it
     - claude-3-5-haiku is the polite bot
     - gemini-2.0-flash-exp is a couples counselor impersonating Sigmond Freud
 - Output saved in [conversation.txt](multi_model_conversation/conversation.txt)
+
+## gradio_llm_chat
+- Basic GPT chat using Gradio
