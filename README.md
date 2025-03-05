@@ -38,3 +38,5 @@ This would be better implemented in something like CrewAI, but I wanted to do it
 
 I can now see why frameworks like CrewAI are popular - it's a pain to code this.
 
+## basic_rag [🔗](basic_rag)
+- Uses files to add relevant context to the chat
