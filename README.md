@@ -40,3 +40,9 @@ I can now see why frameworks like CrewAI are popular - it's a pain to code this.
 
 ## basic_rag [🔗](basic_rag)
 - Uses files to add relevant context to the chat
+
+## chroma_rag [🔗](chroma_rag)
+- Expanded to use OpenAI embeddings fed to Chroma
+- Visualize the vector store in 2D
+- Add memory to the conversation via LangChain
+- Uses Gradio for basic chat interface
