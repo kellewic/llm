@@ -46,3 +46,13 @@ I can now see why frameworks like CrewAI are popular - it's a pain to code this.
 - Visualize the vector store in 2D
 - Add memory to the conversation via LangChain
 - Uses Gradio for basic chat interface
+
+## data_curation [🔗](data_curation)
+- uses Hugging Face McAuley-Lab/Amazon-Reviews-2023 dataset
+- pulls in 8 categories from the dataset
+- cleans data
+- plots data to see distributions
+- clean up distributions
+- split data into training and test data
+- upload dataset to HuggingFace
+- pickle the datasets so we don't have to do all this when we use it again
