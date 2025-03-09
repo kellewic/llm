@@ -98,6 +98,8 @@ Go through various models and see how well they do predicting price based on pro
     - Error=\$98.02, RMSLE=0.82, Hits=44.8%
   - deepseek-r1-distill-llama-70b [📊](frontier_model_test/deepseek-r1-distill-llama-70b.png)
     - Error=\$109.09, RMSLE=0.67, Hits=48.4%
+  - Human Evaluator [📊](frontier_model_test/human_pricer.png)
+    - Error=\$126.55, RMSLE=1.00, Hits=32.0%
   - deepseek-r1-distill-qwen-32b [📊](frontier_model_test/deepseek-r1-distill-qwen-32b.png)
     - Error=\$151.59, RMSLE=0.80, Hits=38.4%
 
