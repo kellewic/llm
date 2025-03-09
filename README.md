@@ -63,20 +63,40 @@ Go through various models and see how well they do predicting price based on pro
 - uses pickled datasets from [data_curation](data_curation)
 - tests against:
   - simple average price of items [📊](basic_model_training/average_pricer.png)
-    - Error \$137.17
-    - Hits 15.2%
+    - Error=\$137.17, RMSLE=1.19, Hits=15.2%
   - Linear regression using Item Weight, Best Sellers Rank, Brand, is_top_brand features [📊](basic_model_training/linear_regression_pricer.png)
-    - Error \$139.20
-    - Hits 15.6%
+    - Error=\$139.20, RMSLE=1.17, Hits=15.6%
   - bag-of-words text features + linear regression [📊](basic_model_training/bow_lr_pricer.png)
-    - Error \$113.60
-    - Hits 24.8%
+    - Error=\$113.60, RMSLE=0.99, Hits=24.8%
   - Word2Vec [📊](basic_model_training/word2vec_lr_pricer.png)
-    - Error \$113.14
-    - Hits 22.8%
+    - Error=\$113.14, RMSLE=1.05, Hits=22.8%
   - Linear SVR [📊](basic_model_training/svr_pricer.png)
-    - Error \$110.91
-    - Hits 29.2%
+    - Error=\$110.91, RMSLE=0.92, Hits=29.2%
   - Random Forest Regressor [📊](basic_model_training/random_forest_pricer.png)
-    - Error \$105.10
-    - Hits 37.6%
+    - Error=\$105.10, RMSLE=0.89, Hits=37.6%
+
+## frontier_model_test [🔗](frontier_model_test)
+- uses pickled test dataset from [data_curation](data_curation)
+- tests against:
+  - gemini-2.0-flash [📊](frontier_model_test/gemini-2.0-flash.png)
+    - Error=\$73.48, RMSLE=0.56, Hits=56.4%
+  - gpt-4o-2024-08-06 [📊](frontier_model_test/gpt-4o-2024-08-06.png)
+    - Error=\$75.66, RMSLE=0.89, Hits=57.6%
+  - gemini-2.0-flash-lite [📊](frontier_model_test/gemini-2.0-flash-lite.png)
+    - Error=\$76.42, RMSLE=0.61, Hits=56.0%
+  - gpt-4o-mini [📊](frontier_model_test/gpt-4o-mini.png)
+    - Error=\$81.61, RMSLE=0.60, Hits=51.6%
+  - claude-3-5-haiku-20241022 [📊](frontier_model_test/claude-3-5-haiku-20241022.png)
+    - Error=\$85.25, RMSLE=0.62, Hits=50.8%
+  - claude-3-5-sonnet-20241022 [📊](frontier_model_test/claude-3-5-sonnet-20241022.png)
+    - Error=\$88.97, RMSLE=0.61, Hits=49.2%
+  - claude-3-7-sonnet-20250219 [📊](frontier_model_test/claude-3-7-sonnet-20250219.png)
+    - Error=\$89.41, RMSLE=0.62, Hits=55.2%
+  - llama-3.3-70b-versatile [📊](frontier_model_test/llama-3.3-70b-versatile.png)
+    - Error=\$98.24, RMSLE=0.70, Hits=44.8%
+  - mistral-saba-24b [📊](frontier_model_test/mistral-saba-24b.png)
+    - Error=\$98.02, RMSLE=0.82, Hits=44.8%
+  - deepseek-r1-distill-llama-70b [📊](frontier_model_test/deepseek-r1-distill-llama-70b.png)
+    - Error=\$109.09, RMSLE=0.67, Hits=48.4%
+  - deepseek-r1-distill-qwen-32b [📊](frontier_model_test/deepseek-r1-distill-qwen-32b.png)
+    - Error=\$151.59, RMSLE=0.80, Hits=38.4%
