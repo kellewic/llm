@@ -100,3 +100,7 @@ Go through various models and see how well they do predicting price based on pro
     - Error=\$109.09, RMSLE=0.67, Hits=48.4%
   - deepseek-r1-distill-qwen-32b [📊](frontier_model_test/deepseek-r1-distill-qwen-32b.png)
     - Error=\$151.59, RMSLE=0.80, Hits=38.4%
+
+## frontier_model_tuning [🔗](frontier_model_tuning)
+Tunes gpt-4o-mini with the pickled training data from [data_curation](data_curation) using 200 samples.
+- Error=\$101.49, RMSLE=0.81, Hits=41.2%
