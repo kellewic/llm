@@ -48,6 +48,7 @@ I can now see why frameworks like CrewAI are popular - it's a pain to code this.
 - Uses Gradio for basic chat interface
 
 ## data_curation [🔗](data_curation)
+Curate Amazon Review data to try and guess price based on descriptive text.
 - uses Hugging Face McAuley-Lab/Amazon-Reviews-2023 dataset
 - pulls in 8 categories from the dataset
 - cleans data
@@ -56,3 +57,26 @@ I can now see why frameworks like CrewAI are popular - it's a pain to code this.
 - split data into training and test data
 - upload dataset to HuggingFace
 - pickle the datasets so we don't have to do all this when we use it again
+
+## basic_model_training [🔗](basic_model_training)
+Go through various models and see how well they do predicting price based on product text.
+- uses pickled datasets from [data_curation](data_curation)
+- tests against:
+  - simple average price of items [📊](basic_model_training/average_pricer.png)
+    - Error \$137.17
+    - Hits 15.2%
+  - Linear regression using Item Weight, Best Sellers Rank, Brand, is_top_brand features [📊](basic_model_training/linear_regression_pricer.png)
+    - Error \$139.20
+    - Hits 15.6%
+  - bag-of-words text features + linear regression [📊](basic_model_training/bow_lr_pricer.png)
+    - Error \$113.60
+    - Hits 24.8%
+  - Word2Vec [📊](basic_model_training/word2vec_lr_pricer.png)
+    - Error \$113.14
+    - Hits 22.8%
+  - Linear SVR [📊](basic_model_training/svr_pricer.png)
+    - Error \$110.91
+    - Hits 29.2%
+  - Random Forest Regressor [📊](basic_model_training/random_forest_pricer.png)
+    - Error \$105.10
+    - Hits 37.6%
