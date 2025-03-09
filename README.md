@@ -102,5 +102,6 @@ Go through various models and see how well they do predicting price based on pro
     - Error=\$151.59, RMSLE=0.80, Hits=38.4%
 
 ## frontier_model_tuning [🔗](frontier_model_tuning)
-Tunes gpt-4o-mini with the pickled training data from [data_curation](data_curation) using 200 samples.
-- Error=\$101.49, RMSLE=0.81, Hits=41.2%
+Fine-tuned gpt-4o-mini with the pickled training data from [data_curation](data_curation) using 200 samples.
+- gpt-4o-mini-2024-07-18 [📊](frontier_model_tuning/gpt_fine_tuned.png)
+    - Error=\$101.49, RMSLE=0.81, Hits=41.2%
