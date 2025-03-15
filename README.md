@@ -107,3 +107,9 @@ Go through various models and see how well they do predicting price based on pro
 Fine-tuned gpt-4o-mini with the pickled training data from [data_curation](data_curation) using 200 samples.
 - gpt-4o-mini-2024-07-18 [📊](frontier_model_tuning/gpt_fine_tuned.png)
     - Error=\$101.49, RMSLE=0.81, Hits=41.2%
+
+## price_is_right_project [🔗](price_is_right_project)
+Pulling together RAG, fine-tuned models, and adding agents. Using [Modal](https://modal.com/) to run it all.
+- Load base llama and fine-tuned llama for product pricing onto a Modal container as "pricing-service"
+- Create a SpecialistAgent to call the pricing-service and return the result
+- 
