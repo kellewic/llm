@@ -1,18 +1,21 @@
-import modal
+#import modal
 
-from agents.specialist_agent import SpecialistAgent
+from agents import FrontierAgent, SpecialistAgent
+from dotenv import find_dotenv, load_dotenv
+from product_database import ProductDatabase
 
-#Pricer = modal.Cls.from_name("pricer-service", "Pricer")
-#pricer = Pricer()
-#reply = pricer.price.remote(
-#    "Keypad Door Knob with Key, Keyless Code Entry Lock, Auto Lock, 50 User Code, Easy to Install,"
-#    " for Home ,Office, Hotel, Bedroom, Garage, No Deadbolt"
-#)
-#print(reply)
+load_dotenv(dotenv_path=find_dotenv())
 
-agent = SpecialistAgent()
-agent.price(
+item_desc = (
     "Keypad Door Knob with Key, Keyless Code Entry Lock, Auto Lock, 50 User Code, Easy to Install,"
     " for Home ,Office, Hotel, Bedroom, Garage, No Deadbolt"
 )
+
+#db = ProductDatabase()
+#collection = db.create_or_get_collection()
+
+agent = FrontierAgent([])
+
+#agent = SpecialistAgent()
+#agent.price(item_desc)
 

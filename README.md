@@ -110,6 +110,7 @@ Fine-tuned gpt-4o-mini with the pickled training data from [data_curation](data_
 
 ## price_is_right_project [🔗](price_is_right_project)
 Pulling together RAG, fine-tuned models, and adding agents. Using [Modal](https://modal.com/) to run it all.
-- Load base llama and fine-tuned llama for product pricing onto a Modal container as "pricing-service"
+- Load base and fine-tuned llama onto a Modal container as "pricing-service"
+- Create a Chroma data store with 400,000 products
 - Create a SpecialistAgent to call the pricing-service and return the result
 - 
