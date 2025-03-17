@@ -1,4 +1,5 @@
 vector_db/
+products_vectorstore/
 .gradio/
 *.pkl
 
