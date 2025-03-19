@@ -1,6 +1,7 @@
-import os
+import os, re
 
 from base import Base
+from items import Item
 from numexpr.utils import detect_number_of_cores
 
 class Agent(Base):
@@ -14,7 +15,7 @@ class Agent(Base):
     GREEN = '\033[32m'
     YELLOW = '\033[33m'
     BLUE = '\033[94m'
-    MAGENTA = '\033[35m'
+    MAGENTA = '\033[95m'
     CYAN = '\033[36m'
     WHITE = '\033[37m'
     
@@ -37,9 +38,18 @@ class Agent(Base):
 
         os.environ["NUMEXPR_MAX_THREADS"] = cores
 
+    def initialize(self, message:str = ""):
+        self.log(f"Initializing{message}")
 
     def ready(self):
         self.log("Ready!")
+
+
+    def price(self, item:Item) -> float:
+        prompt = item.prompt.replace('How much does this cost to the nearest dollar?\n\n', '')
+        prompt = re.sub(r'\n+Price is \$[\d\.]+', '', prompt)
+
+        return self._price(prompt)
 
 
     def log(self, message):

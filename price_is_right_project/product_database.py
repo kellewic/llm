@@ -42,8 +42,6 @@ class ProductDatabase(Base):
             with open('train.pkl', 'rb') as file:
                 train = pickle.load(file)
 
-            train = train[:1000]
-
             model = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')
             step = 1000
 

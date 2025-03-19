@@ -142,7 +142,15 @@ class Logger(logging.Logger):
                 "=> %(lineno)s): %(message)s"
             ))
 
+        self.logger_handler = logger_handler
         self.addHandler(logger_handler)
+
+
+    def disable(self):
+        self.removeHandler(self.logger_handler)
+
+    def enable(self):
+        self.addHandler(self.logger_handler)
 
     ## Close underlying handlers if they support the close() method call
     def close(self):
