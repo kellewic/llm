@@ -6,7 +6,6 @@ from datasets import load_dataset
 from items import Item
 from openai import OpenAI
 from sentence_transformers import SentenceTransformer
-from testing import Tester
 from typing import List, Dict
 
 class FrontierAgent(Agent):

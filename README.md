@@ -118,3 +118,5 @@ Pulling together RAG, fine-tuned models, and adding agents. Using [Modal](https:
 - Create a RandomForestAgent to call the random forest model and return the result
 - Train a linear regression model
 - Create an EnsembleAgent that uses the Specialist, Frontier, and RandomForest agents to gather their prices. It then runs them against a linear regression model to provide its own price
+- Create a deal scanner that scrapes RSS feed for deals and have gpt-4o-mini sort through them
+- 

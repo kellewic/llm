@@ -3,6 +3,7 @@ import joblib, modal, pickle, re, sys
 import numpy as np
 
 from agents import EnsembleAgent, FrontierAgent, RandomForestAgent, SpecialistAgent
+from agents import DealSelection, ScrapedDeal, ScannerAgent
 from dotenv import find_dotenv, load_dotenv
 from product_database import ProductDatabase
 from sklearn.ensemble import RandomForestRegressor
@@ -10,12 +11,12 @@ from testing import Tester
 
 load_dotenv(dotenv_path=find_dotenv())
 
-with open('test.pkl', 'rb') as file:
-    test = pickle.load(file)
+#with open('test.pkl', 'rb') as file:
+#    test = pickle.load(file)
 
 
-db = ProductDatabase()
-collection = db.create_or_get_collection()
+#db = ProductDatabase()
+#collection = db.create_or_get_collection()
 
 #ensemble_agent = EnsembleAgent(collection)
 #ensemble_agent.disable_logging()
@@ -23,8 +24,11 @@ collection = db.create_or_get_collection()
 #Tester.test(ensemble_agent.price, test)
 
 
+agent = ScannerAgent()
 
+result = agent.scan()
 
+print(result)
 
 
 
