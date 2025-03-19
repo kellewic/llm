@@ -68,7 +68,6 @@ class ScannerAgent(Agent):
         """
         user_prompt = self.USER_PROMPT_PREFIX
         user_prompt += '\n\n'.join([scrape.describe() for scrape in scraped])
-#        user_prompt += self.USER_PROMPT_SUFFIX
 
         return user_prompt
 

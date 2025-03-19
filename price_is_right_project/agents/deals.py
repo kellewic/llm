@@ -87,7 +87,9 @@ class ScrapedDeal:
             for entry in feed.entries[:10]:
                 deals.append(cls(entry))
                 time.sleep(0.5)
+
         return deals
+
 
 class Deal(BaseModel):
     """
