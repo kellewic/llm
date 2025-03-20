@@ -1,7 +1,7 @@
 # LLM Engineering
 I used these projects to learn more about LLM engineering. They're in completion order.
 
-Local models are on a VirtualBox VM with 24GB RAM and 16 CPUs.
+Local models are on a VirtualBox VM with 24GB RAM and 16 CPUs. I started with 16GB RAM and 8 CPUs, but it struggled a lot.
 
 ## website_summarizer [🔗](website_summarizer)
 - Use OpenAI API to summarize web page content and return the summary in Markdown.
