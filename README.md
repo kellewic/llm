@@ -121,4 +121,4 @@ Pulling together RAG, fine-tuned models, and adding agents. Using [Modal](https:
 - Create a deal scanner that scrapes RSS feed for deals and have gpt-4o-mini sort through them
 - Create a MessagingAgent to send deal alerts via [Pushover](https://pushover.net/)
 - Create a PlanningAgent that uses the other agents to create a process flow
-- 
+- Create a Gradio UI on top of it all
