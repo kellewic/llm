@@ -5,6 +5,7 @@ from agents.scanner_agent import ScannerAgent
 from agents.ensemble_agent import EnsembleAgent
 from agents.messaging_agent import MessagingAgent
 from items import Item
+from memory import Memory
 
 
 class PlanningAgent(Agent):
@@ -47,13 +48,13 @@ class PlanningAgent(Agent):
         return Opportunity(deal=deal, estimate=estimate, discount=discount)
 
 
-    def plan(self, memory: List[str] = []) -> Optional[Opportunity]:
+    def plan(self, memory: Optional[Memory]) -> Optional[Opportunity]:
         """
         Run the full workflow:
         1. Use the ScannerAgent to find deals from RSS feeds
         2. Use the EnsembleAgent to estimate them
         3. Use the MessagingAgent to send a notification of deals
-        :param memory: a list of URLs that have been surfaced in the past
+        :param memory: a list of Opportunities that have surfaced in the past
         :return: an Opportunity if one was surfaced, otherwise None
         """
         self.log("Starting run")

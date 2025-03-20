@@ -2,6 +2,7 @@ import json, os
 
 from . import Agent
 from .deals import DealSelection, ScrapedDeal
+from memory import Memory
 from openai import OpenAI
 from typing import List, Optional
 
@@ -48,13 +49,17 @@ class ScannerAgent(Agent):
         self.ready()
 
 
-    def fetch_deals(self, memory:List[str]=[]) -> List[ScrapedDeal]:
+    def fetch_deals(self, memory:Optional[Memory]) -> List[ScrapedDeal]:
         """
         Look up deals published on RSS feeds
         Return any new deals that are not already in the memory provided
         """
         self.log("Fetch deals from RSS feed")
-        urls = [opp.deal.url for opp in memory]
+
+        urls = []
+        if memory:
+            urls = [opp.deal.url for opp in memory]
+
         scraped = ScrapedDeal.fetch(show_progress=True)
         result = [scrape for scrape in scraped if scrape.url not in urls]
         self.log(f"Received {len(result)} deals not already scraped")
