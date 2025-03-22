@@ -14,7 +14,9 @@ image = modal.Image.debian_slim().pip_install(
 hf_cache_vol = modal.Volume.from_name("hf-cache", create_if_missing=True)
 
 GPU = "T4"
-MIN_CONTAINERS = 1 # keep N containers active to avoid cold starts
+
+## Keep N containers active to avoid cold starts
+MIN_CONTAINERS = 0
 
 BASE_MODEL = "meta-llama/Meta-Llama-3.1-8B"
 PROJECT_NAME = "pricer"
