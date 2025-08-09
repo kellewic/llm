@@ -122,3 +122,10 @@ Pulling together RAG, fine-tuned models, and adding agents. Using [Modal](https:
 - Create a MessagingAgent to send deal alerts via [Pushover](https://pushover.net/)
 - Create a PlanningAgent that uses the other agents to create a process flow
 - Create a Gradio UI on top of it all
+
+## huggingface [🔗](huggingface)
+- [01] GPT2 text generation
+- [02] Playing with Tokenizers
+- [03] Trying out different models for text classification, summarization, and generation
+- [04] Getting, cleaning, and creating a custom dataset
+- [05] Create a custom Tokenizer
