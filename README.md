@@ -129,3 +129,4 @@ Pulling together RAG, fine-tuned models, and adding agents. Using [Modal](https:
 - [03] Trying out different models for text classification, summarization, and generation
 - [04] Getting, cleaning, and creating a custom dataset
 - [05] Create a custom Tokenizer
+- [06] Fine tuning
