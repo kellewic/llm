@@ -131,3 +131,4 @@ Pulling together RAG, fine-tuned models, and adding agents. Using [Modal](https:
 - [05] Create a custom Tokenizer
 - [06] Fine tuning
 - [07] GPT2 fine tuning
+- [08] Quantization
