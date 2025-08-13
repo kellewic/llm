@@ -133,3 +133,4 @@ Pulling together RAG, fine-tuned models, and adding agents. Using [Modal](https:
 - [07] GPT2 fine tuning
 - [08] Quantization
 - [09] Multimodal
+- [10] Natural Language Processing
