@@ -134,3 +134,4 @@ Pulling together RAG, fine-tuned models, and adding agents. Using [Modal](https:
 - [08] Quantization
 - [09] Multimodal
 - [10] Natural Language Processing
+- [11] Fine-Tuning Multiclass Text Classification
