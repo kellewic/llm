@@ -2,6 +2,7 @@ vector_db/
 products_vectorstore/
 .gradio/
 *.pkl
+project.md
 
 .DS_Store
 
