@@ -3,6 +3,9 @@ products_vectorstore/
 .gradio/
 *.pkl
 
+.DS_Store
+.vscode/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
