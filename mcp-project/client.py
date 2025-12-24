@@ -1,4 +1,5 @@
 import asyncio
+import ast
 import json
 import logging
 import os
@@ -315,24 +316,45 @@ class DataExtractor:
             pricing_data = json.loads(extraction_response)
 
             for plan in pricing_data.get("plans", []):
-                await self.sqlite_server.execute_tool(
-                    "write_query",
-                    {
-                        "query": f"""
+                try:
+                    # Handle None values properly - convert to appropriate defaults
+                    company_name = pricing_data.get("company_name") or "Unknown"
+                    plan_name = plan.get("plan_name") or "Unknown Plan"
+                    input_tokens = plan.get("input_tokens")
+                    output_tokens = plan.get("output_tokens")
+                    currency = plan.get("currency") or "USD"
+                    billing_period = plan.get("billing_period") or "unknown"
+                    limitations = plan.get("limitations") or ""
+                    features = plan.get("features") or []
+                    
+                    # Escape single quotes in string values to prevent SQL injection
+                    company_name_escaped = str(company_name).replace("'", "''")
+                    plan_name_escaped = str(plan_name).replace("'", "''")
+                    limitations_escaped = str(limitations).replace("'", "''")
+                    source_query_escaped = str(user_query).replace("'", "''")
+                    features_json = json.dumps(features).replace("'", "''")
+                    
+                    # Handle None values for numeric fields - use NULL in SQL
+                    input_tokens_sql = "NULL" if input_tokens is None else str(input_tokens)
+                    output_tokens_sql = "NULL" if output_tokens is None else str(output_tokens)
+                    
+                    query = f"""
                     INSERT INTO pricing_plans (company_name, plan_name, input_tokens, output_tokens, currency, billing_period, features, limitations, source_query)
                     VALUES (
-                        '{pricing_data.get("company_name", "Unknown")}',
-                        '{plan.get("plan_name", "Unknown Plan")}',
-                        '{plan.get("input_tokens", 0)}',
-                        '{plan.get("output_tokens", 0)}',
-                        '{plan.get("currency", "USD")}',
-                        '{plan.get("billing_period", "unknown")}',
-                        '{json.dumps(plan.get("features", []))}',
-                        '{plan.get("limitations", "")}',
-                        '{user_query}')
+                        '{company_name_escaped}',
+                        '{plan_name_escaped}',
+                        {input_tokens_sql},
+                        {output_tokens_sql},
+                        '{currency}',
+                        '{billing_period}',
+                        '{features_json}',
+                        '{limitations_escaped}',
+                        '{source_query_escaped}')
                     """
-                    },
-                )
+                    
+                    result = await self.sqlite_server.execute_tool("write_query", {"query": query})
+                except Exception as e:
+                    logging.error(f"Error inserting plan {plan.get('plan_name', 'Unknown')}: {e}")
 
             logger.info(f"Stored {len(pricing_data.get('plans', []))} pricing plans")
 
@@ -388,12 +410,8 @@ class ChatSession:
         messages: List[Any] = [{"role": "user", "content": query}]
 
         try:
-            logging.info(f"Calling Anthropic API with model: {self.model_name}")
             response = self.anthropic.messages.create(
                 max_tokens=2024, model=self.model_name, tools=anthropic_tools, messages=messages  # type: ignore[arg-type]
-            )
-            logging.info(
-                f"Received response, content type: {type(response.content)}, length: {len(response.content) if response.content else 0}"
             )
         except Exception as e:
             logging.error(f"Error calling Anthropic API: {e}")
@@ -512,9 +530,6 @@ class ChatSession:
                     response = self.anthropic.messages.create(
                         max_tokens=2024, model=self.model_name, tools=anthropic_tools, messages=messages  # type: ignore[arg-type]
                     )
-                    logging.info(
-                        f"Received follow-up response, content length: {len(response.content) if response.content else 0}"
-                    )
                 except Exception as e:
                     logging.error(f"Error calling Anthropic API in tool loop: {e}")
                     print(f"Error: Failed to get follow-up response: {str(e)}")
@@ -593,18 +608,66 @@ class ChatSession:
             print("=" * 50)
 
             print("\nPricing Plans:")
-            # The result.content is a list with one item, a dict, where the 'text' key holds the rows
-            if pricing.content and len(pricing.content) > 0 and "text" in pricing.content[0]:
-                for plan in pricing.content[0]["text"]:
-                    print(
-                        f"  • {plan['company_name']}: {plan['plan_name']} - Input Token ${plan['input_tokens']}, Output Tokens ${plan['output_tokens']}"
-                    )
+            
+            # Try to extract the data - SQLite MCP server returns TextContent objects
+            rows = None
+            if hasattr(pricing, "content") and pricing.content:
+                # Check if content[0] is a TextContent object (from mcp.types)
+                if hasattr(pricing.content[0], "text"):
+                    # TextContent object - get the text attribute
+                    text_data = pricing.content[0].text
+                    if isinstance(text_data, str):
+                        try:
+                            # SQLite MCP server returns Python literal syntax (single quotes)
+                            # Use ast.literal_eval to parse it safely
+                            rows = ast.literal_eval(text_data)
+                        except (ValueError, SyntaxError) as e:
+                            # Fallback to JSON parsing if literal_eval fails
+                            try:
+                                rows = json.loads(text_data)
+                            except json.JSONDecodeError as json_err:
+                                logging.error(f"Failed to parse text as Python literal or JSON: {e}, {json_err}")
+                                rows = None
+                    elif isinstance(text_data, list):
+                        rows = text_data
+                        logging.info(f"Text data is already a list with {len(rows)} items")
+                # Fallback: Check if content[0] is a dict with 'text' key
+                elif isinstance(pricing.content[0], dict):
+                    if "text" in pricing.content[0]:
+                        # Try parsing as JSON if it's a string
+                        text_data = pricing.content[0]["text"]
+                        if isinstance(text_data, str):
+                            try:
+                                rows = json.loads(text_data)
+                            except json.JSONDecodeError:
+                                rows = None
+                        elif isinstance(text_data, list):
+                            rows = text_data
+                    # Check if content[0] has the rows directly
+                    elif "rows" in pricing.content[0]:
+                        rows = pricing.content[0]["rows"]
+                    # Check for other possible keys
+                    elif "data" in pricing.content[0]:
+                        rows = pricing.content[0]["data"]
+                elif isinstance(pricing.content[0], list):
+                    rows = pricing.content[0]
+            
+            # If we found rows, display them
+            if rows and isinstance(rows, list) and len(rows) > 0:
+                for plan in rows:
+                    if isinstance(plan, dict):
+                        print(
+                            f"  • {plan.get('company_name', 'Unknown')}: {plan.get('plan_name', 'Unknown Plan')} - Input Token ${plan.get('input_tokens', 0)}, Output Tokens ${plan.get('output_tokens', 0)}"
+                        )
+                    else:
+                        print(f"  • {plan}")
             else:
                 print("  No pricing plans found.")
 
             print("=" * 50)
         except Exception as e:
             print(f"Error showing data: {e}")
+            logging.error(f"Error in show_stored_data: {e}", exc_info=True)
 
     async def start(self) -> None:
         """Main chat session handler."""
