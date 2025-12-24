@@ -36,6 +36,7 @@ dev = [
     "isort>=6.0.1",
     "mypy>=1.17.1",
     "pytest>=8.4.2",
+    "pytest-asyncio>=0.24.0",
     "pytest-cov>=6.3.0",
     "ruff>=0.12.12",
 ]
@@ -44,6 +45,7 @@ dev = [
 minversion = "8.4"
 addopts = [
 	"--cov=server",
+	"--cov=client",
 	"--cov-report=html",
 	"--cov-fail-under=85",
 	"--strict-markers",
@@ -55,6 +57,7 @@ pythonpath = ["."]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
+asyncio_mode = "auto"
 
 [tool.coverage.run]
 source = ["."]

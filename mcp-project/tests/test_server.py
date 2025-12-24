@@ -22,8 +22,8 @@ class TestScrapeWebsites:
 
     @pytest.fixture
     def mock_firecrawl_app(self):
-        """Mock FirecrawlApp."""
-        with patch("server.FirecrawlApp") as mock_app_class:
+        """Mock Firecrawl."""
+        with patch("server.Firecrawl") as mock_app_class:
             mock_app = MagicMock()
             mock_app_class.return_value = mock_app
             yield mock_app
@@ -46,13 +46,16 @@ class TestScrapeWebsites:
             # Mock successful scrape result
             mock_scrape_result = Mock()
             mock_scrape_result.model_dump.return_value = {
-                "success": True,
-                "title": "Test Page",
-                "description": "Test Description",
+                "metadata": {
+                    "status_code": 200,
+                    "error": None,
+                    "title": "Test Page",
+                    "description": "Test Description",
+                },
                 "markdown": "# Test Markdown Content",
                 "html": "<html><body>Test HTML Content</body></html>",
             }
-            mock_firecrawl_app.scrape_url.return_value = mock_scrape_result
+            mock_firecrawl_app.scrape.return_value = mock_scrape_result
 
             # Execute
             result = scrape_websites(websites, formats=formats)
@@ -100,10 +103,12 @@ class TestScrapeWebsites:
             # Mock failed scrape result
             mock_scrape_result = Mock()
             mock_scrape_result.model_dump.return_value = {
-                "success": False,
-                "error": "Failed to scrape",
+                "metadata": {
+                    "status_code": 500,
+                    "error": "Failed to scrape",
+                },
             }
-            mock_firecrawl_app.scrape_url.return_value = mock_scrape_result
+            mock_firecrawl_app.scrape.return_value = mock_scrape_result
 
             # Execute
             result = scrape_websites(websites)
@@ -151,13 +156,16 @@ class TestScrapeWebsites:
             # Mock successful scrape result
             mock_scrape_result = Mock()
             mock_scrape_result.model_dump.return_value = {
-                "success": True,
-                "title": "New Page",
-                "description": "New Description",
+                "metadata": {
+                    "status_code": 200,
+                    "error": None,
+                    "title": "New Page",
+                    "description": "New Description",
+                },
                 "markdown": "# New Content",
                 "html": "<html>New HTML</html>",
             }
-            mock_firecrawl_app.scrape_url.return_value = mock_scrape_result
+            mock_firecrawl_app.scrape.return_value = mock_scrape_result
 
             # Execute
             result = scrape_websites(websites)
@@ -188,13 +196,16 @@ class TestScrapeWebsites:
 
             mock_scrape_result = Mock()
             mock_scrape_result.model_dump.return_value = {
-                "success": True,
-                "title": "Test",
-                "description": "Test",
+                "metadata": {
+                    "status_code": 200,
+                    "error": None,
+                    "title": "Test",
+                    "description": "Test",
+                },
                 "markdown": "# Test",
                 "html": "<html>Test</html>",
             }
-            mock_firecrawl_app.scrape_url.return_value = mock_scrape_result
+            mock_firecrawl_app.scrape.return_value = mock_scrape_result
 
             # Execute
             result = scrape_websites(websites)
@@ -215,23 +226,29 @@ class TestScrapeWebsites:
                 mock_result = Mock()
                 if "example1.com" in url:
                     mock_result.model_dump.return_value = {
-                        "success": True,
-                        "title": "Provider 1",
-                        "description": "Description 1",
+                        "metadata": {
+                            "status_code": 200,
+                            "error": None,
+                            "title": "Provider 1",
+                            "description": "Description 1",
+                        },
                         "markdown": "# Provider 1",
                         "html": "<html>Provider 1</html>",
                     }
                 else:
                     mock_result.model_dump.return_value = {
-                        "success": True,
-                        "title": "Provider 2",
-                        "description": "Description 2",
+                        "metadata": {
+                            "status_code": 200,
+                            "error": None,
+                            "title": "Provider 2",
+                            "description": "Description 2",
+                        },
                         "markdown": "# Provider 2",
                         "html": "<html>Provider 2</html>",
                     }
                 return mock_result
 
-            mock_firecrawl_app.scrape_url.side_effect = mock_scrape_side_effect
+            mock_firecrawl_app.scrape.side_effect = mock_scrape_side_effect
 
             # Execute
             result = scrape_websites(websites)
@@ -267,12 +284,15 @@ class TestScrapeWebsites:
 
             mock_scrape_result = Mock()
             mock_scrape_result.model_dump.return_value = {
-                "success": True,
-                "title": "Test",
-                "description": "Test",
+                "metadata": {
+                    "status_code": 200,
+                    "error": None,
+                    "title": "Test",
+                    "description": "Test",
+                },
                 "markdown": "# Test",
             }
-            mock_firecrawl_app.scrape_url.return_value = mock_scrape_result
+            mock_firecrawl_app.scrape.return_value = mock_scrape_result
 
             # Execute
             result = scrape_websites(websites, formats=formats)
@@ -286,6 +306,99 @@ class TestScrapeWebsites:
 
             assert "markdown" in metadata["test_provider"]["content_files"]
             assert "html" not in metadata["test_provider"]["content_files"]
+
+
+class TestScrapeWebsitesAdditional:
+    """Additional test cases for scrape_websites function."""
+
+    @pytest.fixture
+    def temp_dir(self):
+        """Create a temporary directory for testing."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            yield tmpdir
+
+    @pytest.fixture
+    def mock_firecrawl_app(self):
+        """Mock Firecrawl."""
+        with patch("server.Firecrawl") as mock_app_class:
+            mock_app = MagicMock()
+            mock_app_class.return_value = mock_app
+            yield mock_app
+
+    @pytest.fixture
+    def mock_env_api_key(self):
+        """Mock environment variable for API key."""
+        with patch.dict(os.environ, {"FIRECRAWL_API_KEY": "test-api-key"}):
+            yield
+
+    def test_scrape_websites_json_decode_error(self, temp_dir, mock_firecrawl_app, mock_env_api_key):
+        """Test scrape_websites with JSON decode error in existing metadata."""
+        with patch("server.SCRAPE_DIR", temp_dir):
+            # Create invalid JSON metadata file
+            metadata_file = os.path.join(temp_dir, "scraped_metadata.json")
+            with open(metadata_file, "w") as f:
+                f.write("invalid json {")
+
+            websites = {"test_provider": "https://example.com"}
+
+            mock_scrape_result = Mock()
+            mock_scrape_result.model_dump.return_value = {
+                "metadata": {
+                    "status_code": 200,
+                    "error": None,
+                    "title": "Test",
+                    "description": "Test",
+                },
+                "markdown": "# Test",
+            }
+            mock_firecrawl_app.scrape.return_value = mock_scrape_result
+
+            # Should handle JSON decode error and continue
+            result = scrape_websites(websites)
+            assert "test_provider" in result
+
+    def test_scrape_websites_exception_handling(self, temp_dir, mock_firecrawl_app, mock_env_api_key):
+        """Test scrape_websites with exception during scraping."""
+        with patch("server.SCRAPE_DIR", temp_dir):
+            websites = {"test_provider": "https://example.com"}
+
+            # Mock scrape to raise an exception
+            mock_firecrawl_app.scrape.side_effect = Exception("Network error")
+
+            result = scrape_websites(websites)
+
+            # Should handle exception and return empty list or partial results
+            # Check that metadata was still written
+            metadata_file = os.path.join(temp_dir, "scraped_metadata.json")
+            assert os.path.exists(metadata_file)
+
+    def test_scrape_websites_no_content_for_format(self, temp_dir, mock_firecrawl_app, mock_env_api_key):
+        """Test scrape_websites when format content is missing."""
+        with patch("server.SCRAPE_DIR", temp_dir):
+            websites = {"test_provider": "https://example.com"}
+            formats = ["markdown", "html"]
+
+            mock_scrape_result = Mock()
+            mock_scrape_result.model_dump.return_value = {
+                "metadata": {
+                    "status_code": 200,
+                    "error": None,
+                    "title": "Test",
+                    "description": "Test",
+                },
+                "markdown": "# Test",
+                # html is missing
+            }
+            mock_firecrawl_app.scrape.return_value = mock_scrape_result
+
+            result = scrape_websites(websites, formats=formats)
+
+            assert "test_provider" in result
+            # Check that only markdown file was created
+            metadata_file = os.path.join(temp_dir, "scraped_metadata.json")
+            with open(metadata_file, "r") as f:
+                metadata = json.load(f)
+                assert "markdown" in metadata["test_provider"]["content_files"]
 
 
 class TestExtractScrapedInfo:
@@ -514,3 +627,29 @@ class TestExtractScrapedInfo:
 
             # Assert
             assert "There's no saved information related to identifier 'test_provider'" in result
+
+    def test_extract_scraped_info_file_read_error(self, temp_dir):
+        """Test extract_scraped_info with file read error."""
+        with patch("server.SCRAPE_DIR", temp_dir):
+            metadata_file = os.path.join(temp_dir, "scraped_metadata.json")
+            metadata = {
+                "test_provider": {
+                    "provider_name": "test_provider",
+                    "url": "https://example.com",
+                    "domain": "example.com",
+                    "content_files": {
+                        "markdown": "test_provider_markdown.txt",
+                    },
+                }
+            }
+            with open(metadata_file, "w") as f:
+                json.dump(metadata, f)
+
+            # File doesn't exist, should handle gracefully
+            result = extract_scraped_info("test_provider")
+
+            # Should return result with empty content for missing file
+            result_dict = json.loads(result)
+            assert result_dict["provider_name"] == "test_provider"
+            assert "content" in result_dict
+            assert result_dict["content"]["markdown"] == ""
