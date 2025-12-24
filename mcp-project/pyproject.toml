@@ -12,7 +12,7 @@ classifiers = [
 	"Programming Language :: Python :: 3",
 	"Programming Language :: Python :: 3.12",
 ]
-name = "mcp"
+name = "mcp-project"
 version = "0.1.0"
 description = "MCP project for scraping websites"
 keywords = ["mcp", "scraping", "websites"]

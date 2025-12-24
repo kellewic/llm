@@ -5,10 +5,9 @@ from datetime import datetime
 from typing import Dict, List, Optional
 from urllib.parse import urlparse
 
-from dotenv import load_dotenv
-from firecrawl import FirecrawlApp  # type: ignore
-
-from mcp.server.fastmcp import FastMCP
+from dotenv import load_dotenv # type: ignore
+from firecrawl import Firecrawl # type: ignore
+from mcp.server.fastmcp import FastMCP # type: ignore
 
 load_dotenv()
 
@@ -44,7 +43,7 @@ def scrape_websites(
         if not api_key:
             raise ValueError("API key must be provided or set as FIRECRAWL_API_KEY environment variable")
 
-    app = FirecrawlApp(api_key=api_key)
+    app = Firecrawl(api_key=api_key)
 
     path = os.path.join(SCRAPE_DIR)
     os.makedirs(path, exist_ok=True)
@@ -76,10 +75,16 @@ def scrape_websites(
     for provider_name, url in websites.items():
         try:
             logger.info(f"Scraping {provider_name}: {url}")
-            scrape_result = app.scrape_url(url, formats=formats).model_dump()
+            scrape_result = app.scrape(url, formats=formats).model_dump()
+
+            metadata = scrape_result.get("metadata", {})
+            is_success = False
+
+            if metadata and metadata.get("status_code") == 200 and metadata.get("error") is None:
+                is_success = True
 
             # Check if scrape was successful
-            if not scrape_result.get("success", False):
+            if is_success is False:
                 logger.error(f"Failed to scrape {provider_name}: {scrape_result.get('error', 'Unknown error')}")
 
                 # Still add metadata entry for failed scrape
@@ -106,8 +111,8 @@ def scrape_websites(
                 "formats": formats,
                 "success": True,
                 "content_files": {},
-                "title": scrape_result.get("title", ""),
-                "description": scrape_result.get("description", ""),
+                "title": metadata.get("title", ""),
+                "description": metadata.get("description", ""),
             }
 
             # Save content for each format

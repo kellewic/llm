@@ -9,11 +9,10 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, TypedDict
 
-from anthropic import Anthropic
-from dotenv import load_dotenv
-
-from mcp import ClientSession, StdioServerParameters
-from mcp.client.stdio import stdio_client
+from anthropic import Anthropic # type: ignore
+from dotenv import load_dotenv # type: ignore
+from mcp import ClientSession, StdioServerParameters # type: ignore
+from mcp.client.stdio import stdio_client # type: ignore
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
@@ -32,8 +31,10 @@ class Configuration:
         """Initialize configuration with environment variables."""
         self.load_env()
         self.api_key = os.getenv("ANTHROPIC_API_KEY")
-        self.model_name = os.getenv("ANTHROPIC_MODEL", "claude-3-5-sonnet-20240620")
-        self.api_url = os.getenv("ANTHROPIC_API_URL")
+        self.model_name = os.getenv("ANTHROPIC_API_MODEL")
+        # Get API URL, but treat empty strings as None (for commented out env vars)
+        api_url = os.getenv("ANTHROPIC_API_URL")
+        self.api_url = api_url if api_url and api_url.strip() else None
 
     @staticmethod
     def load_env() -> None:
@@ -351,10 +352,12 @@ class ChatSession:
     ) -> None:
         self.servers: list[Server] = servers
         self.model_name = model_name
-        # Initialize Anthropic client with custom URL if provided
+        # Initialize Anthropic client with custom URL if provided, else use default
         if api_url:
+            logging.info(f"Using custom Anthropic API URL: {api_url}")
             self.anthropic = Anthropic(api_key=api_key, base_url=api_url)
         else:
+            logging.info("Using default Anthropic API URL")
             self.anthropic = Anthropic(api_key=api_key)
         self.available_tools: List[ToolDefinition] = []
         self.tool_to_server: Dict[str, str] = {}
@@ -383,9 +386,19 @@ class ChatSession:
             )
 
         messages: List[Any] = [{"role": "user", "content": query}]
-        response = self.anthropic.messages.create(
-            max_tokens=2024, model=self.model_name, tools=anthropic_tools, messages=messages  # type: ignore[arg-type]
-        )
+
+        try:
+            logging.info(f"Calling Anthropic API with model: {self.model_name}")
+            response = self.anthropic.messages.create(
+                max_tokens=2024, model=self.model_name, tools=anthropic_tools, messages=messages  # type: ignore[arg-type]
+            )
+            logging.info(
+                f"Received response, content type: {type(response.content)}, length: {len(response.content) if response.content else 0}"
+            )
+        except Exception as e:
+            logging.error(f"Error calling Anthropic API: {e}")
+            print(f"Error: Failed to get response from API: {str(e)}")
+            return
 
         full_response = ""
         source_url: str | None = None
@@ -394,6 +407,15 @@ class ChatSession:
         process_query = True
         while process_query:
             assistant_content: List[Any] = []
+            # Check if response.content exists and is iterable
+            if response.content is None:
+                logging.error("Response content is None")
+                print("Error: Received empty response from API")
+                break
+            if not hasattr(response, "content") or not response.content:
+                logging.error("Response has no content or content is empty")
+                print("Error: Response has no content")
+                break
             for content in response.content:
                 if content.type == "text":
                     full_response += content.text + "\n"
@@ -432,19 +454,30 @@ class ChatSession:
                             try:
                                 result = await server.execute_tool(tool_name, tool_args)
                                 # MCP call_tool returns a CallToolResult with content attribute
-                                if hasattr(result, "content") and result.content:
+                                if hasattr(result, "content") and result.content is not None:
                                     # Extract text from content items
                                     text_parts = []
-                                    for item in result.content:
-                                        if hasattr(item, "text"):
-                                            text_parts.append(item.text)
-                                        elif isinstance(item, dict) and "text" in item:
-                                            text_parts.append(item["text"])
-                                        else:
-                                            text_parts.append(str(item))
-                                    tool_result_content = "\n".join(text_parts)
+                                    # Ensure content is iterable
+                                    if isinstance(result.content, (list, tuple)):
+                                        for item in result.content:
+                                            if hasattr(item, "text"):
+                                                text_parts.append(item.text)
+                                            elif isinstance(item, dict) and "text" in item:
+                                                text_parts.append(item["text"])
+                                            else:
+                                                text_parts.append(str(item))
+                                    else:
+                                        # If content is not a list, try to convert it
+                                        text_parts.append(str(result.content))
+                                    tool_result_content = "\n".join(text_parts) if text_parts else "No content returned"
                                 else:
-                                    tool_result_content = str(result)
+                                    # If no content attribute or content is None, try to get text from result
+                                    if hasattr(result, "text"):
+                                        tool_result_content = result.text
+                                    elif hasattr(result, "isError") and result.isError:
+                                        tool_result_content = f"Tool execution error: {str(result)}"
+                                    else:
+                                        tool_result_content = str(result) if result else "No result returned"
                             except Exception as e:
                                 tool_result_content = f"Error executing tool: {str(e)}"
 
@@ -463,9 +496,25 @@ class ChatSession:
                     )
 
                     # Call self.anthropic.messages.create again with the new messages list
-                    response = self.anthropic.messages.create(
-                        max_tokens=2024, model=self.model_name, tools=anthropic_tools, messages=messages  # type: ignore[arg-type]
-                    )
+                    try:
+                        response = self.anthropic.messages.create(
+                            max_tokens=2024, model=self.model_name, tools=anthropic_tools, messages=messages  # type: ignore[arg-type]
+                        )
+                        logging.info(
+                            f"Received follow-up response, content length: {len(response.content) if response.content else 0}"
+                        )
+                    except Exception as e:
+                        logging.error(f"Error calling Anthropic API in tool loop: {e}")
+                        print(f"Error: Failed to get follow-up response: {str(e)}")
+                        process_query = False
+                        break
+
+                    # Check if response is valid
+                    if response.content is None or not response.content:
+                        logging.error("Follow-up response has no content")
+                        print("Error: Follow-up response has no content")
+                        process_query = False
+                        break
 
                     # Check if the new response is just text, and if so, stop the loop
                     if len(response.content) == 1 and response.content[0].type == "text":
