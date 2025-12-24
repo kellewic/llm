@@ -6,7 +6,7 @@ from typing import Dict, List, Optional
 from urllib.parse import urlparse
 
 from dotenv import load_dotenv
-from firecrawl import FirecrawlApp
+from firecrawl import FirecrawlApp  # type: ignore
 
 from mcp.server.fastmcp import FastMCP
 
