@@ -32,6 +32,8 @@ class Configuration:
         """Initialize configuration with environment variables."""
         self.load_env()
         self.api_key = os.getenv("ANTHROPIC_API_KEY")
+        self.model_name = os.getenv("ANTHROPIC_MODEL", "claude-3-5-sonnet-20240620")
+        self.api_url = os.getenv("ANTHROPIC_API_URL")
 
     @staticmethod
     def load_env() -> None:
@@ -53,7 +55,21 @@ class Configuration:
             JSONDecodeError: If configuration file is invalid JSON.
             ValueError: If configuration file is missing required fields.
         """
-        # complete
+        try:
+            with open(file_path, "r") as f:
+                config = json.load(f)
+
+            if "mcpServers" not in config:
+                raise ValueError("Configuration file is missing required 'mcpServers' field")
+
+            return config
+
+        except FileNotFoundError:
+            raise
+        except json.JSONDecodeError:
+            raise
+        except Exception as e:
+            raise ValueError(f"Error loading configuration: {e}") from e
 
     @property
     def anthropic_api_key(self) -> str:
@@ -67,7 +83,26 @@ class Configuration:
         """
         if not self.api_key:
             raise ValueError("ANTHROPIC_API_KEY not found in environment variables")
+
         return self.api_key
+
+    @property
+    def anthropic_model(self) -> str:
+        """Get the Anthropic model name.
+
+        Returns:
+            The model name as a string.
+        """
+        return self.model_name
+
+    @property
+    def anthropic_api_url(self) -> str | None:
+        """Get the Anthropic API URL (if custom proxy is used).
+
+        Returns:
+            The API URL as a string, or None if using default.
+        """
+        return self.api_url
 
 
 class Server:
@@ -87,8 +122,11 @@ class Server:
         if command is None:
             raise ValueError("The command must be a valid string and cannot be None.")
 
-        # complete params
-        server_params = StdioServerParameters()
+        server_params = StdioServerParameters(
+            command=command,
+            args=self.config["args"],
+            env={**os.environ, **self.config["env"]} if self.config.get("env") else None,
+        )
         try:
             stdio_transport = await self.exit_stack.enter_async_context(stdio_client(server_params))
             read, write = stdio_transport
@@ -110,7 +148,21 @@ class Server:
         Raises:
             RuntimeError: If the server is not initialized.
         """
-        # complete
+        if not self.session:
+            raise RuntimeError("Server session not initialized. Call initialize() first.")
+
+        tools_response = await self.session.list_tools()
+        tools_list: List[ToolDefinition] = []
+
+        for tool in tools_response.tools:
+            tool_def: ToolDefinition = {
+                "name": tool.name,
+                "description": tool.description or "",
+                "input_schema": tool.inputSchema,
+            }
+            tools_list.append(tool_def)
+
+        return tools_list
 
     async def execute_tool(
         self,
@@ -134,7 +186,33 @@ class Server:
             RuntimeError: If server is not initialized.
             Exception: If tool execution fails after all retries.
         """
-        # complete
+        if not self.session:
+            raise RuntimeError("Server session not initialized. Call initialize() first.")
+
+        last_exception: Exception | None = None
+
+        for attempt in range(retries + 1):
+            try:
+                logging.info(f"Executing {tool_name}...")
+                result = await self.session.call_tool(
+                    name=tool_name, arguments=arguments, read_timeout_seconds=timedelta(seconds=60)
+                )
+                return result
+
+            except Exception as e:
+                last_exception = e
+
+                if attempt < retries:
+                    logging.warning(f"Tool execution failed (attempt {attempt + 1}/{retries + 1}): {e}. Retrying...")
+                    await asyncio.sleep(delay)
+
+                else:
+                    logging.error(f"Tool execution failed after {retries + 1} attempts: {e}")
+
+        if last_exception:
+            raise last_exception
+
+        raise RuntimeError("Tool execution failed with unknown error")
 
     async def cleanup(self) -> None:
         """Clean up server resources."""
@@ -150,9 +228,10 @@ class Server:
 class DataExtractor:
     """Handles extraction and storage of structured data from LLM responses."""
 
-    def __init__(self, sqlite_server: Server, anthropic_client: Anthropic):
+    def __init__(self, sqlite_server: Server, anthropic_client: Anthropic, model_name: str):
         self.sqlite_server = sqlite_server
         self.anthropic = anthropic_client
+        self.model_name = model_name
 
     async def setup_data_tables(self) -> None:
         """Setup tables for storing extracted data."""
@@ -188,7 +267,7 @@ class DataExtractor:
         """Use Claude to extract structured data."""
         try:
             response = self.anthropic.messages.create(
-                max_tokens=1024, model="claude-sonnet-4-5-20250929", messages=[{"role": "user", "content": prompt}]
+                max_tokens=1024, model=self.model_name, messages=[{"role": "user", "content": prompt}]
             )
 
             text_content = ""
@@ -202,7 +281,7 @@ class DataExtractor:
             logging.error(f"Error in structured extraction: {e}")
             return '{"error": "extraction failed"}'
 
-    async def extract_and_store_data(self, user_query: str, llm_response: str, source_url: str = None) -> None:
+    async def extract_and_store_data(self, user_query: str, llm_response: str, source_url: str | None = None) -> None:
         """Extract structured data from LLM response and store it."""
         try:
             extraction_prompt = f"""
@@ -235,8 +314,24 @@ class DataExtractor:
             pricing_data = json.loads(extraction_response)
 
             for plan in pricing_data.get("plans", []):
-                pass
-                # complete
+                await self.sqlite_server.execute_tool(
+                    "write_query",
+                    {
+                        "query": f"""
+                    INSERT INTO pricing_plans (company_name, plan_name, input_tokens, output_tokens, currency, billing_period, features, limitations, source_query)
+                    VALUES (
+                        '{pricing_data.get("company_name", "Unknown")}',
+                        '{plan.get("plan_name", "Unknown Plan")}',
+                        '{plan.get("input_tokens", 0)}',
+                        '{plan.get("output_tokens", 0)}',
+                        '{plan.get("currency", "USD")}',
+                        '{plan.get("billing_period", "unknown")}',
+                        '{json.dumps(plan.get("features", []))}',
+                        '{plan.get("limitations", "")}',
+                        '{user_query}')
+                    """
+                    },
+                )
 
             logger.info(f"Stored {len(pricing_data.get('plans', []))} pricing plans")
 
@@ -247,9 +342,20 @@ class DataExtractor:
 class ChatSession:
     """Orchestrates the interaction between user, LLM, and tools."""
 
-    def __init__(self, servers: list[Server], api_key: str) -> None:
+    def __init__(
+        self,
+        servers: list[Server],
+        api_key: str,
+        api_url: str | None = None,
+        model_name: str = "claude-3-5-sonnet-20240620",
+    ) -> None:
         self.servers: list[Server] = servers
-        self.anthropic = Anthropic(api_key=api_key)
+        self.model_name = model_name
+        # Initialize Anthropic client with custom URL if provided
+        if api_url:
+            self.anthropic = Anthropic(api_key=api_key, base_url=api_url)
+        else:
+            self.anthropic = Anthropic(api_key=api_key)
         self.available_tools: List[ToolDefinition] = []
         self.tool_to_server: Dict[str, str] = {}
         self.sqlite_server: Server | None = None
@@ -265,28 +371,117 @@ class ChatSession:
 
     async def process_query(self, query: str) -> None:
         """Process a user query and extract/store relevant data."""
-        messages = [{"role": "user", "content": query}]
+        # Convert tools to Anthropic format
+        anthropic_tools = []
+        for tool in self.available_tools:
+            anthropic_tools.append(
+                {
+                    "name": tool["name"],
+                    "description": tool["description"],
+                    "input_schema": tool["input_schema"],
+                }
+            )
+
+        messages: List[Any] = [{"role": "user", "content": query}]
         response = self.anthropic.messages.create(
-            max_tokens=2024, model="<ENTER_MODEL_NAME>", tools=self.available_tools, messages=messages
+            max_tokens=2024, model=self.model_name, tools=anthropic_tools, messages=messages  # type: ignore[arg-type]
         )
 
         full_response = ""
-        source_url = None
+        source_url: str | None = None
         used_web_search = False
 
         process_query = True
         while process_query:
-            assistant_content = []
+            assistant_content: List[Any] = []
             for content in response.content:
                 if content.type == "text":
-                    pass
-                    # complete
+                    full_response += content.text + "\n"
+                    assistant_content.append({"type": "text", "text": content.text})
+                    # Check if this is the only content
+                    if len(response.content) == 1:
+                        process_query = False
                 elif content.type == "tool_use":
-                    pass
-                    # complete
+                    # Append the tool use request to assistant_content and then to messages
+                    assistant_content.append(
+                        {
+                            "type": "tool_use",
+                            "id": content.id,
+                            "name": content.name,
+                            "input": content.input,
+                        }
+                    )
+                    messages.append({"role": "assistant", "content": assistant_content})
+
+                    # Get the tool id, args, and name from the content
+                    tool_id = content.id
+                    tool_name = content.name
+                    tool_args = content.input
+
+                    # Find the server that has this tool
+                    server_name = self.tool_to_server.get(tool_name)
+                    if not server_name:
+                        tool_result_content = f"Error: Tool '{tool_name}' not found"
+                    else:
+                        # Find the server object
+                        server = next((s for s in self.servers if s.name == server_name), None)
+                        if not server:
+                            tool_result_content = f"Error: Server '{server_name}' not found"
+                        else:
+                            # Execute tool on that server
+                            try:
+                                result = await server.execute_tool(tool_name, tool_args)
+                                # MCP call_tool returns a CallToolResult with content attribute
+                                if hasattr(result, "content") and result.content:
+                                    # Extract text from content items
+                                    text_parts = []
+                                    for item in result.content:
+                                        if hasattr(item, "text"):
+                                            text_parts.append(item.text)
+                                        elif isinstance(item, dict) and "text" in item:
+                                            text_parts.append(item["text"])
+                                        else:
+                                            text_parts.append(str(item))
+                                    tool_result_content = "\n".join(text_parts)
+                                else:
+                                    tool_result_content = str(result)
+                            except Exception as e:
+                                tool_result_content = f"Error executing tool: {str(e)}"
+
+                    # Append the tool_result to messages
+                    messages.append(
+                        {
+                            "role": "user",
+                            "content": [
+                                {
+                                    "type": "tool-result",
+                                    "tool_use_id": tool_id,
+                                    "content": tool_result_content,
+                                }
+                            ],
+                        }
+                    )
+
+                    # Call self.anthropic.messages.create again with the new messages list
+                    response = self.anthropic.messages.create(
+                        max_tokens=2024, model=self.model_name, tools=anthropic_tools, messages=messages  # type: ignore[arg-type]
+                    )
+
+                    # Check if the new response is just text, and if so, stop the loop
+                    if len(response.content) == 1 and response.content[0].type == "text":
+                        full_response += response.content[0].text + "\n"
+                        process_query = False
+
+            # If we processed text content and it was the only content, we already set process_query = False
+            if assistant_content and process_query:
+                messages.append({"role": "assistant", "content": assistant_content})
+
+        # Print the final response
+        if full_response.strip():
+            print(full_response.strip())
 
         if self.data_extractor and full_response.strip():
-            await self.data_extractor.extract_and_store_data(query, full_response.strip(), source_url)
+            await self.data_extractor.extract_and_store_data(query, full_response.strip(), source_url or "")
 
     def _extract_url_from_result(self, result_text: str) -> str | None:
         """Extract URL from tool result."""
@@ -325,8 +520,27 @@ class ChatSession:
             return
 
         try:
-            # complete
-            pass
+            pricing = await self.sqlite_server.execute_tool(
+                "read_query",
+                {
+                    "query": "SELECT company_name, plan_name, input_tokens, output_tokens, currency FROM pricing_plans ORDER BY created_at DESC LIMIT 5"
+                },
+            )
+
+            print("\nRecently Stored Data:")
+            print("=" * 50)
+
+            print("\nPricing Plans:")
+            # The result.content is a list with one item, a dict, where the 'text' key holds the rows
+            if pricing.content and len(pricing.content) > 0 and "text" in pricing.content[0]:
+                for plan in pricing.content[0]["text"]:
+                    print(
+                        f"  • {plan['company_name']}: {plan['plan_name']} - Input Token ${plan['input_tokens']}, Output Tokens ${plan['output_tokens']}"
+                    )
+            else:
+                print("  No pricing plans found.")
+
+            print("=" * 50)
         except Exception as e:
             print(f"Error showing data: {e}")
 
@@ -353,7 +567,7 @@ class ChatSession:
             print(f"Available tools: {[tool['name'] for tool in self.available_tools]}")
 
             if self.sqlite_server:
-                self.data_extractor = DataExtractor(self.sqlite_server, self.anthropic)
+                self.data_extractor = DataExtractor(self.sqlite_server, self.anthropic, self.model_name)
                 await self.data_extractor.setup_data_tables()
                 print("Data extraction enabled")
 
@@ -373,7 +587,12 @@ async def main() -> None:
     server_config = config.load_config(config_file)
 
     servers = [Server(name, srv_config) for name, srv_config in server_config["mcpServers"].items()]
-    chat_session = ChatSession(servers, config.anthropic_api_key)
+    chat_session = ChatSession(
+        servers,
+        config.anthropic_api_key,
+        api_url=config.anthropic_api_url,
+        model_name=config.anthropic_model,
+    )
     await chat_session.start()
 
 

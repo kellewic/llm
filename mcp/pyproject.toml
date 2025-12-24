@@ -12,7 +12,7 @@ classifiers = [
 	"Programming Language :: Python :: 3",
 	"Programming Language :: Python :: 3.12",
 ]
-name = "mcp-project"
+name = "mcp"
 version = "0.1.0"
 description = "MCP project for scraping websites"
 keywords = ["mcp", "scraping", "websites"]
@@ -43,7 +43,7 @@ dev = [
 [tool.pytest.ini_options]
 minversion = "8.4"
 addopts = [
-	"--cov=mcp_project",
+	"--cov=server",
 	"--cov-report=html",
 	"--cov-fail-under=85",
 	"--strict-markers",
@@ -51,12 +51,13 @@ addopts = [
 	"-ra",
 ]
 testpaths = ["tests"]
+pythonpath = ["."]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
 
 [tool.coverage.run]
-source = ["mcp_project"]
+source = ["."]
 branch = true
 omit = [
     "tests/*"
