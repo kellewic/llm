@@ -308,6 +308,20 @@ class TestServer:
         # Should not raise, just log the error
         await server.cleanup()
 
+    @pytest.mark.asyncio
+    async def test_execute_tool_unknown_error(self, server):
+        """Test execute_tool when last_exception is None (shouldn't happen but test the branch)."""
+        mock_session = AsyncMock()
+        # Mock to return None somehow (edge case)
+        mock_session.call_tool = AsyncMock(return_value=None)
+        server.session = mock_session
+
+        # This shouldn't raise RuntimeError in normal flow, but let's test the branch
+        # by making it fail in an unexpected way
+        result = await server.execute_tool("test_tool", {"arg": "value"}, retries=0)
+        # Should return the result, not raise RuntimeError
+        assert result is None
+
 
 class TestDataExtractor:
     """Test cases for the DataExtractor class."""
@@ -452,6 +466,62 @@ class TestDataExtractor:
 
         # Should not call execute_tool if no plans
         assert not mock_sqlite_server.execute_tool.called
+
+    @pytest.mark.asyncio
+    async def test_get_structured_extraction_error(self, data_extractor, mock_anthropic_client):
+        """Test _get_structured_extraction with error."""
+        mock_anthropic_client.messages.create.side_effect = Exception("API Error")
+
+        result = await data_extractor._get_structured_extraction("test prompt")
+        assert "error" in result
+        assert "extraction failed" in result
+
+    @pytest.mark.asyncio
+    async def test_get_structured_extraction_no_text_content(self, data_extractor, mock_anthropic_client):
+        """Test _get_structured_extraction with no text content."""
+        mock_content = Mock()
+        mock_content.type = "image"  # Not text
+
+        mock_response = Mock()
+        mock_response.content = [mock_content]
+        mock_anthropic_client.messages.create.return_value = mock_response
+
+        result = await data_extractor._get_structured_extraction("test prompt")
+        assert result == ""  # Should return empty string
+
+    @pytest.mark.asyncio
+    async def test_setup_data_tables_error(self, data_extractor, mock_sqlite_server):
+        """Test setup_data_tables with error."""
+        mock_sqlite_server.execute_tool = AsyncMock(side_effect=Exception("DB Error"))
+
+        await data_extractor.setup_data_tables()
+        # Should handle error gracefully
+
+    @pytest.mark.asyncio
+    async def test_extract_and_store_data_insert_error(self, data_extractor, mock_sqlite_server, mock_anthropic_client):
+        """Test extract_and_store_data with error during insert."""
+        mock_content = Mock()
+        mock_content.type = "text"
+        mock_content.text = json.dumps({
+            "company_name": "Test Company",
+            "plans": [
+                {
+                    "plan_name": "Test Plan",
+                    "input_tokens": 0.1,
+                    "output_tokens": 0.2,
+                }
+            ],
+        })
+
+        mock_response = Mock()
+        mock_response.content = [mock_content]
+        mock_anthropic_client.messages.create.return_value = mock_response
+
+        # Mock execute_tool to fail on insert
+        mock_sqlite_server.execute_tool = AsyncMock(side_effect=Exception("Insert error"))
+
+        await data_extractor.extract_and_store_data("test query", "test response")
+        # Should handle error gracefully
 
 
 class TestChatSession:
@@ -716,4 +786,369 @@ class TestChatSession:
 
         # Should cleanup on failure
         mock_servers[0].cleanup.assert_called()
+
+    @pytest.mark.asyncio
+    async def test_process_query_no_assistant_content(self, chat_session):
+        """Test process_query when no assistant content is generated."""
+        mock_response = Mock()
+        mock_response.content = []
+
+        chat_session.anthropic.messages.create.return_value = mock_response
+        chat_session.available_tools = []
+        chat_session.data_extractor = None
+
+        await chat_session.process_query("test query")
+
+    @pytest.mark.asyncio
+    async def test_process_query_tool_result_dict_text(self, chat_session, mock_servers):
+        """Test process_query with tool result as dict with text."""
+        mock_tool_use = Mock()
+        mock_tool_use.type = "tool_use"
+        mock_tool_use.id = "tool_123"
+        mock_tool_use.name = "tool1"
+        mock_tool_use.input = {}
+
+        mock_response1 = Mock()
+        mock_response1.content = [mock_tool_use]
+
+        mock_text = Mock()
+        mock_text.type = "text"
+        mock_text.text = "Done"
+
+        mock_response2 = Mock()
+        mock_response2.content = [mock_text]
+
+        chat_session.anthropic.messages.create.side_effect = [mock_response1, mock_response2]
+        chat_session.available_tools = [{"name": "tool1", "description": "Tool 1", "input_schema": {}}]
+        chat_session.tool_to_server = {"tool1": "test_server"}
+        chat_session.servers = mock_servers
+        chat_session.data_extractor = None
+
+        # Mock tool result as dict with text
+        mock_tool_result = Mock()
+        mock_tool_result.content = [{"text": "Tool result"}]
+        mock_servers[0].execute_tool = AsyncMock(return_value=mock_tool_result)
+
+        await chat_session.process_query("test query")
+
+    @pytest.mark.asyncio
+    async def test_process_query_tool_result_is_error(self, chat_session, mock_servers):
+        """Test process_query with tool result that has isError."""
+        mock_tool_use = Mock()
+        mock_tool_use.type = "tool_use"
+        mock_tool_use.id = "tool_123"
+        mock_tool_use.name = "tool1"
+        mock_tool_use.input = {}
+
+        mock_response1 = Mock()
+        mock_response1.content = [mock_tool_use]
+
+        mock_text = Mock()
+        mock_text.type = "text"
+        mock_text.text = "Error occurred"
+
+        mock_response2 = Mock()
+        mock_response2.content = [mock_text]
+
+        chat_session.anthropic.messages.create.side_effect = [mock_response1, mock_response2]
+        chat_session.available_tools = [{"name": "tool1", "description": "Tool 1", "input_schema": {}}]
+        chat_session.tool_to_server = {"tool1": "test_server"}
+        chat_session.servers = mock_servers
+        chat_session.data_extractor = None
+
+        # Mock tool result with isError
+        mock_tool_result = Mock()
+        mock_tool_result.content = None
+        mock_tool_result.isError = True
+        mock_tool_result.text = None
+        mock_servers[0].execute_tool = AsyncMock(return_value=mock_tool_result)
+
+        await chat_session.process_query("test query")
+
+    @pytest.mark.asyncio
+    async def test_process_query_tool_result_no_content_no_text(self, chat_session, mock_servers):
+        """Test process_query with tool result that has no content and no text."""
+        mock_tool_use = Mock()
+        mock_tool_use.type = "tool_use"
+        mock_tool_use.id = "tool_123"
+        mock_tool_use.name = "tool1"
+        mock_tool_use.input = {}
+
+        mock_response1 = Mock()
+        mock_response1.content = [mock_tool_use]
+
+        mock_text = Mock()
+        mock_text.type = "text"
+        mock_text.text = "Done"
+
+        mock_response2 = Mock()
+        mock_response2.content = [mock_text]
+
+        chat_session.anthropic.messages.create.side_effect = [mock_response1, mock_response2]
+        chat_session.available_tools = [{"name": "tool1", "description": "Tool 1", "input_schema": {}}]
+        chat_session.tool_to_server = {"tool1": "test_server"}
+        chat_session.servers = mock_servers
+        chat_session.data_extractor = None
+
+        # Mock tool result with no content and no text
+        mock_tool_result = Mock()
+        mock_tool_result.content = None
+        del mock_tool_result.text  # Remove text attribute
+        mock_tool_result.isError = False
+        mock_servers[0].execute_tool = AsyncMock(return_value=mock_tool_result)
+
+        await chat_session.process_query("test query")
+
+    @pytest.mark.asyncio
+    async def test_process_query_tool_result_non_list_content(self, chat_session, mock_servers):
+        """Test process_query with tool result content that's not a list."""
+        mock_tool_use = Mock()
+        mock_tool_use.type = "tool_use"
+        mock_tool_use.id = "tool_123"
+        mock_tool_use.name = "tool1"
+        mock_tool_use.input = {}
+
+        mock_response1 = Mock()
+        mock_response1.content = [mock_tool_use]
+
+        mock_text = Mock()
+        mock_text.type = "text"
+        mock_text.text = "Done"
+
+        mock_response2 = Mock()
+        mock_response2.content = [mock_text]
+
+        chat_session.anthropic.messages.create.side_effect = [mock_response1, mock_response2]
+        chat_session.available_tools = [{"name": "tool1", "description": "Tool 1", "input_schema": {}}]
+        chat_session.tool_to_server = {"tool1": "test_server"}
+        chat_session.servers = mock_servers
+        chat_session.data_extractor = None
+
+        # Mock tool result with content that's not a list
+        mock_tool_result = Mock()
+        mock_tool_result.content = "string content"  # Not a list
+        mock_servers[0].execute_tool = AsyncMock(return_value=mock_tool_result)
+
+        await chat_session.process_query("test query")
+
+    @pytest.mark.asyncio
+    async def test_process_query_no_tool_use_blocks(self, chat_session):
+        """Test process_query when response has text but no tool_use blocks."""
+        mock_text = Mock()
+        mock_text.type = "text"
+        mock_text.text = "Just text response"
+
+        mock_response = Mock()
+        mock_response.content = [mock_text]
+
+        chat_session.anthropic.messages.create.return_value = mock_response
+        chat_session.available_tools = []
+        chat_session.data_extractor = None
+
+        await chat_session.process_query("test query")
+
+    @pytest.mark.asyncio
+    async def test_process_query_empty_full_response(self, chat_session):
+        """Test process_query when full_response is empty."""
+        mock_text = Mock()
+        mock_text.type = "text"
+        mock_text.text = "   "  # Only whitespace
+
+        mock_response = Mock()
+        mock_response.content = [mock_text]
+
+        chat_session.anthropic.messages.create.return_value = mock_response
+        chat_session.available_tools = []
+        chat_session.data_extractor = None
+
+        await chat_session.process_query("test query")
+
+    @pytest.mark.asyncio
+    async def test_show_stored_data_dict_text(self, chat_session):
+        """Test show_stored_data with dict content containing text."""
+        mock_sqlite = AsyncMock()
+        mock_content_dict = {"text": '[{"company_name": "Test", "plan_name": "Plan", "input_tokens": 0.1, "output_tokens": 0.2, "currency": "USD"}]'}
+
+        mock_result = Mock()
+        mock_result.content = [mock_content_dict]
+        mock_sqlite.execute_tool = AsyncMock(return_value=mock_result)
+
+        chat_session.sqlite_server = mock_sqlite
+
+        await chat_session.show_stored_data()
+
+    @pytest.mark.asyncio
+    async def test_show_stored_data_dict_rows(self, chat_session):
+        """Test show_stored_data with dict content containing rows."""
+        mock_sqlite = AsyncMock()
+        mock_content_dict = {"rows": [{"company_name": "Test", "plan_name": "Plan", "input_tokens": 0.1, "output_tokens": 0.2, "currency": "USD"}]}
+
+        mock_result = Mock()
+        mock_result.content = [mock_content_dict]
+        mock_sqlite.execute_tool = AsyncMock(return_value=mock_result)
+
+        chat_session.sqlite_server = mock_sqlite
+
+        await chat_session.show_stored_data()
+
+    @pytest.mark.asyncio
+    async def test_show_stored_data_dict_data(self, chat_session):
+        """Test show_stored_data with dict content containing data."""
+        mock_sqlite = AsyncMock()
+        mock_content_dict = {"data": [{"company_name": "Test", "plan_name": "Plan", "input_tokens": 0.1, "output_tokens": 0.2, "currency": "USD"}]}
+
+        mock_result = Mock()
+        mock_result.content = [mock_content_dict]
+        mock_sqlite.execute_tool = AsyncMock(return_value=mock_result)
+
+        chat_session.sqlite_server = mock_sqlite
+
+        await chat_session.show_stored_data()
+
+    @pytest.mark.asyncio
+    async def test_show_stored_data_list_content(self, chat_session):
+        """Test show_stored_data with list as content[0]."""
+        mock_sqlite = AsyncMock()
+        mock_content_list = [{"company_name": "Test", "plan_name": "Plan", "input_tokens": 0.1, "output_tokens": 0.2, "currency": "USD"}]
+
+        mock_result = Mock()
+        mock_result.content = [mock_content_list]
+        mock_sqlite.execute_tool = AsyncMock(return_value=mock_result)
+
+        chat_session.sqlite_server = mock_sqlite
+
+        await chat_session.show_stored_data()
+
+    @pytest.mark.asyncio
+    async def test_show_stored_data_non_dict_plan(self, chat_session):
+        """Test show_stored_data with plan that's not a dict."""
+        mock_sqlite = AsyncMock()
+        mock_text_content = Mock()
+        mock_text_content.text = "[{'company_name': 'Test'}, 'not a dict']"
+
+        mock_result = Mock()
+        mock_result.content = [mock_text_content]
+        mock_sqlite.execute_tool = AsyncMock(return_value=mock_result)
+
+        chat_session.sqlite_server = mock_sqlite
+
+        await chat_session.show_stored_data()
+
+    @pytest.mark.asyncio
+    async def test_show_stored_data_text_data_is_list(self, chat_session):
+        """Test show_stored_data when text_data is already a list."""
+        mock_sqlite = AsyncMock()
+        mock_text_content = Mock()
+        mock_text_content.text = [{"company_name": "Test", "plan_name": "Plan", "input_tokens": 0.1, "output_tokens": 0.2, "currency": "USD"}]
+
+        mock_result = Mock()
+        mock_result.content = [mock_text_content]
+        mock_sqlite.execute_tool = AsyncMock(return_value=mock_result)
+
+        chat_session.sqlite_server = mock_sqlite
+
+        await chat_session.show_stored_data()
+
+    @pytest.mark.asyncio
+    async def test_process_query_with_data_extractor(self, chat_session):
+        """Test process_query when data_extractor is set."""
+        mock_text = Mock()
+        mock_text.type = "text"
+        mock_text.text = "Response with pricing info"
+
+        mock_response = Mock()
+        mock_response.content = [mock_text]
+
+        mock_data_extractor = AsyncMock()
+        chat_session.data_extractor = mock_data_extractor
+        chat_session.anthropic.messages.create.return_value = mock_response
+        chat_session.available_tools = []
+
+        await chat_session.process_query("test query")
+
+        # Should call extract_and_store_data
+        mock_data_extractor.extract_and_store_data.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_process_query_multiple_text_blocks(self, chat_session):
+        """Test process_query with multiple text content blocks."""
+        mock_text1 = Mock()
+        mock_text1.type = "text"
+        mock_text1.text = "First part"
+
+        mock_text2 = Mock()
+        mock_text2.type = "text"
+        mock_text2.text = "Second part"
+
+        mock_response = Mock()
+        mock_response.content = [mock_text1, mock_text2]
+
+        chat_session.anthropic.messages.create.return_value = mock_response
+        chat_session.available_tools = []
+        chat_session.data_extractor = None
+
+        await chat_session.process_query("test query")
+
+    def test_chat_session_with_api_url(self):
+        """Test ChatSession initialization with API URL."""
+        with patch("client.Anthropic") as mock_anthropic_class:
+            mock_anthropic = Mock()
+            mock_anthropic_class.return_value = mock_anthropic
+
+            session = ChatSession(
+                [],
+                "test-api-key",
+                api_url="https://custom.url",
+                model_name="test-model",
+            )
+
+            # Verify Anthropic was called with base_url
+            mock_anthropic_class.assert_called_once_with(api_key="test-api-key", base_url="https://custom.url")
+            assert session.anthropic == mock_anthropic
+            assert session.model_name == "test-model"
+
+    def test_chat_session_without_api_url(self):
+        """Test ChatSession initialization without API URL."""
+        with patch("client.Anthropic") as mock_anthropic_class:
+            mock_anthropic = Mock()
+            mock_anthropic_class.return_value = mock_anthropic
+
+            session = ChatSession(
+                [],
+                "test-api-key",
+                api_url=None,
+                model_name="test-model",
+            )
+
+            # Verify Anthropic was called without base_url
+            mock_anthropic_class.assert_called_once_with(api_key="test-api-key")
+            assert session.anthropic == mock_anthropic
+            assert session.model_name == "test-model"
+
+    @pytest.mark.asyncio
+    async def test_process_query_server_not_found(self, chat_session, mock_servers):
+        """Test process_query when server is not found."""
+        mock_tool_use = Mock()
+        mock_tool_use.type = "tool_use"
+        mock_tool_use.id = "tool_123"
+        mock_tool_use.name = "tool1"
+        mock_tool_use.input = {}
+
+        mock_response1 = Mock()
+        mock_response1.content = [mock_tool_use]
+
+        mock_text = Mock()
+        mock_text.type = "text"
+        mock_text.text = "Server not found"
+
+        mock_response2 = Mock()
+        mock_response2.content = [mock_text]
+
+        chat_session.anthropic.messages.create.side_effect = [mock_response1, mock_response2]
+        chat_session.available_tools = [{"name": "tool1", "description": "Tool 1", "input_schema": {}}]
+        chat_session.tool_to_server = {"tool1": "nonexistent_server"}
+        chat_session.servers = mock_servers
+        chat_session.data_extractor = None
+
+        await chat_session.process_query("test query")
 
