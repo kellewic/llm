@@ -1,7 +1,7 @@
 import json
 import logging
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 from urllib.parse import urlparse
 
@@ -75,6 +75,16 @@ def scrape_websites(
     for provider_name, url in websites.items():
         try:
             logger.info(f"Scraping {provider_name}: {url}")
+
+            # check if url has already been scraped in the last hour
+            if provider_name in scraped_metadata:
+                scraped_at = scraped_metadata[provider_name].get("scraped_at")
+
+                if scraped_at and datetime.now() - datetime.fromisoformat(scraped_at) < timedelta(hours=1):
+                    logger.info(f"Skipping {provider_name}: {url} because it has already been scraped in the last hour")
+                    successful_scrapes.append(provider_name)
+                    continue
+
             scrape_result = app.scrape(url, formats=formats).model_dump()
 
             metadata = scrape_result.get("metadata", {})

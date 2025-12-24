@@ -407,6 +407,8 @@ class ChatSession:
         process_query = True
         while process_query:
             assistant_content: List[Any] = []
+            tool_use_blocks: List[Any] = []
+            
             # Check if response.content exists and is iterable
             if response.content is None:
                 logging.error("Response content is None")
@@ -416,6 +418,8 @@ class ChatSession:
                 logging.error("Response has no content or content is empty")
                 print("Error: Response has no content")
                 break
+            
+            # First pass: collect all content blocks
             for content in response.content:
                 if content.type == "text":
                     full_response += content.text + "\n"
@@ -424,7 +428,8 @@ class ChatSession:
                     if len(response.content) == 1:
                         process_query = False
                 elif content.type == "tool_use":
-                    # Append the tool use request to assistant_content and then to messages
+                    # Collect all tool_use blocks
+                    tool_use_blocks.append(content)
                     assistant_content.append(
                         {
                             "type": "tool_use",
@@ -433,9 +438,15 @@ class ChatSession:
                             "input": content.input,
                         }
                     )
-                    messages.append({"role": "assistant", "content": assistant_content})
-
-                    # Get the tool id, args, and name from the content
+            
+            # If there are tool_use blocks, we need to execute them all and send results together
+            if tool_use_blocks:
+                # Append assistant message with all tool_use blocks
+                messages.append({"role": "assistant", "content": assistant_content})
+                
+                # Execute all tools and collect results
+                tool_results: List[Dict[str, Any]] = []
+                for content in tool_use_blocks:
                     tool_id = content.id
                     tool_name = content.name
                     tool_args = content.input
@@ -480,50 +491,52 @@ class ChatSession:
                                         tool_result_content = str(result) if result else "No result returned"
                             except Exception as e:
                                 tool_result_content = f"Error executing tool: {str(e)}"
+                    
+                    # Add tool result to the list
+                    tool_results.append({
+                        "type": "tool_result",
+                        "tool_use_id": tool_id,
+                        "content": tool_result_content,
+                    })
+                
+                # Append all tool_results in a single user message
+                messages.append(
+                    {
+                        "role": "user",
+                        "content": tool_results,
+                    }
+                )
 
-                    # Append the tool_result to messages
-                    messages.append(
-                        {
-                            "role": "user",
-                            "content": [
-                                {
-                                    "type": "tool-result",
-                                    "tool_use_id": tool_id,
-                                    "content": tool_result_content,
-                                }
-                            ],
-                        }
+                # Call self.anthropic.messages.create again with the new messages list
+                try:
+                    response = self.anthropic.messages.create(
+                        max_tokens=2024, model=self.model_name, tools=anthropic_tools, messages=messages  # type: ignore[arg-type]
                     )
+                    logging.info(
+                        f"Received follow-up response, content length: {len(response.content) if response.content else 0}"
+                    )
+                except Exception as e:
+                    logging.error(f"Error calling Anthropic API in tool loop: {e}")
+                    print(f"Error: Failed to get follow-up response: {str(e)}")
+                    process_query = False
+                    break
 
-                    # Call self.anthropic.messages.create again with the new messages list
-                    try:
-                        response = self.anthropic.messages.create(
-                            max_tokens=2024, model=self.model_name, tools=anthropic_tools, messages=messages  # type: ignore[arg-type]
-                        )
-                        logging.info(
-                            f"Received follow-up response, content length: {len(response.content) if response.content else 0}"
-                        )
-                    except Exception as e:
-                        logging.error(f"Error calling Anthropic API in tool loop: {e}")
-                        print(f"Error: Failed to get follow-up response: {str(e)}")
-                        process_query = False
-                        break
+                # Check if response is valid
+                if response.content is None or not response.content:
+                    logging.error("Follow-up response has no content")
+                    print("Error: Follow-up response has no content")
+                    process_query = False
+                    break
 
-                    # Check if response is valid
-                    if response.content is None or not response.content:
-                        logging.error("Follow-up response has no content")
-                        print("Error: Follow-up response has no content")
-                        process_query = False
-                        break
-
-                    # Check if the new response is just text, and if so, stop the loop
-                    if len(response.content) == 1 and response.content[0].type == "text":
-                        full_response += response.content[0].text + "\n"
-                        process_query = False
-
-            # If we processed text content and it was the only content, we already set process_query = False
-            if assistant_content and process_query:
-                messages.append({"role": "assistant", "content": assistant_content})
+                # Check if the new response is just text, and if so, stop the loop
+                if len(response.content) == 1 and response.content[0].type == "text":
+                    full_response += response.content[0].text + "\n"
+                    process_query = False
+            else:
+                # No tool_use blocks, just text - we're done
+                if assistant_content:
+                    messages.append({"role": "assistant", "content": assistant_content})
+                process_query = False
 
         # Print the final response
         if full_response.strip():
